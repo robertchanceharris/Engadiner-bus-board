@@ -1,197 +1,175 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
-<meta charset="utf-8">
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <title>Engadiner Weg Bus Board</title>
 
 <style>
-html,body{
-    margin:0;
-    background:#000;
-    color:#fff;
-    font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;
-    height:100%;
+html, body {
+    margin: 0;
+    padding: 0;
+    background: #000;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    overflow: hidden;
 }
 
-.container{
-    padding:20px;
+.container {
+    padding: 20px 30px;
 }
 
-.header{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin-bottom:20px;
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
-h1{
-    margin:0;
-    font-size:48px;
+h1 {
+    margin: 0;
+    font-size: 54px;
+    font-weight: 700;
 }
 
-.clock{
-    font-size:42px;
-    color:#ccc;
+.clock {
+    font-size: 48px;
+    color: #cccccc;
 }
 
-.updated{
-    color:#888;
-    margin-bottom:20px;
+.updated {
+    margin-top: 10px;
+    color: #888;
+    font-size: 18px;
 }
 
-table{
-    width:100%;
-    border-collapse:collapse;
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
 }
 
-tr{
-    border-bottom:1px solid #222;
+tr {
+    border-bottom: 1px solid #222;
 }
 
-td{
-    padding:18px 10px;
-    font-size:40px;
+td {
+    padding: 18px 8px;
+    vertical-align: middle;
 }
 
-.line{
-    width:120px;
-    font-weight:bold;
+.line {
+    width: 120px;
+    font-size: 48px;
+    font-weight: bold;
 }
 
-.line-m85{
-    color:#ffd400;
+.line-m85 {
+    color: #FFD700;
 }
 
-.line-285{
-    color:#52b7ff;
+.line-285 {
+    color: #4DB8FF;
 }
 
-.destination{
-    width:auto;
+.destination {
+    font-size: 42px;
 }
 
-.minutes{
-    text-align:right;
-    width:180px;
-    font-weight:bold;
+.minutes {
+    width: 180px;
+    text-align: right;
+    font-size: 56px;
+    font-weight: bold;
 }
 
-.now{
-    color:#00ff88;
+.now {
+    color: #00FF88;
 }
 
-.loading{
-    font-size:30px;
-    color:#888;
-}
-
-.error{
-    color:#ff6666;
-    font-size:28px;
+.error {
+    color: #FF6666;
+    font-size: 32px;
+    padding-top: 30px;
 }
 </style>
+
 </head>
+
 <body>
 
 <div class="container">
 
+```
 <div class="header">
     <h1>Engadiner Weg</h1>
-    <div class="clock" id="clock"></div>
+    <div class="clock" id="clock">--:--:--</div>
 </div>
 
-<div class="updated" id="updated"></div>
+<div class="updated" id="updated">
+    Loading...
+</div>
 
 <table>
-<tbody id="departures">
-<tr>
-<td class="loading">Loading departures…</td>
-</tr>
-</tbody>
+    <tbody id="departures">
+    </tbody>
 </table>
+```
 
 </div>
 
 <script>
 
-const STOP_NAME = "Engadiner Weg";
-const LINES = ["M85","285"];
-
-let stopId = null;
+const STOP_ID = "900066353";
+const LINES = ["M85", "285"];
 
 function updateClock() {
     document.getElementById("clock").textContent =
         new Date().toLocaleTimeString("de-DE");
 }
 
-setInterval(updateClock,1000);
+setInterval(updateClock, 1000);
 updateClock();
-
-async function findStopId() {
-
-    const response = await fetch(
-        "https://v6.bvg.transport.rest/stops?query=" +
-        encodeURIComponent(STOP_NAME)
-    );
-
-    const data = await response.json();
-
-    if (!data.length) {
-        throw new Error("Stop not found");
-    }
-
-    return data[0].id;
-}
 
 async function loadDepartures() {
 
     try {
 
-        if(!stopId){
-            stopId = await findStopId();
-            console.log("Stop ID:", stopId);
-        }
-
         const response = await fetch(
-            `https://v6.bvg.transport.rest/stops/${stopId}/departures?duration=120`
+            `https://v6.bvg.transport.rest/stops/${STOP_ID}/departures?duration=120`
         );
 
         const result = await response.json();
 
-        const departures =
-            (result.departures || result)
-            .filter(d =>
-                d.line &&
-                LINES.includes(d.line.name)
+        const departures = result.departures
+            .filter(dep =>
+                dep.line &&
+                LINES.includes(dep.line.name)
             )
-            .sort((a,b) =>
-                new Date(a.when) -
-                new Date(b.when)
+            .sort((a, b) =>
+                new Date(a.when) - new Date(b.when)
             )
-            .slice(0,8);
+            .slice(0, 12);
 
-        const tbody =
-            document.getElementById("departures");
+        const tbody = document.getElementById("departures");
 
         tbody.innerHTML = "";
 
         departures.forEach(dep => {
 
             const mins = Math.round(
-                (new Date(dep.when) - new Date())
-                / 60000
+                (new Date(dep.when) - new Date()) / 60000
             );
 
-            const tr = document.createElement("tr");
+            const row = document.createElement("tr");
 
             const lineClass =
                 dep.line.name === "M85"
-                ? "line-m85"
-                : "line-285";
+                    ? "line-m85"
+                    : "line-285";
 
-            tr.innerHTML = `
+            row.innerHTML = `
                 <td class="line ${lineClass}">
                     ${dep.line.name}
                 </td>
@@ -209,29 +187,29 @@ async function loadDepartures() {
                 </td>
             `;
 
-            tbody.appendChild(tr);
+            tbody.appendChild(row);
         });
 
-        document.getElementById("updated")
-            .textContent =
+        document.getElementById("updated").textContent =
             "Updated: " +
             new Date().toLocaleTimeString("de-DE");
 
-    } catch(err) {
+    } catch (err) {
 
         console.error(err);
 
-        document.getElementById("departures")
-            .innerHTML =
-            `<tr><td class="error">
-                Unable to load live departures
-             </td></tr>`;
+        document.getElementById("departures").innerHTML =
+            `<tr>
+                <td colspan="3" class="error">
+                    Unable to load departures
+                </td>
+            </tr>`;
     }
 }
 
 loadDepartures();
 
-setInterval(loadDepartures,30000);
+setInterval(loadDepartures, 30000);
 
 </script>
 
