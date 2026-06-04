@@ -1,11 +1,10 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<title>Engadiner Weg Bus Board</title>
+<title>Engadiner Weg Board</title>
 
 <style>
 html, body {
@@ -18,36 +17,42 @@ html, body {
 }
 
 .container {
-    padding: 20px 30px;
+    padding: 24px 32px;
 }
 
 .header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
 }
 
 h1 {
     margin: 0;
-    font-size: 54px;
-    font-weight: 700;
+    font-size: 58px;
 }
 
 .clock {
-    font-size: 48px;
-    color: #cccccc;
+    font-size: 44px;
+    color: #ccc;
+    text-align: right;
 }
 
-.updated {
+.subheader {
+    display: flex;
+    justify-content: space-between;
     margin-top: 10px;
     color: #888;
-    font-size: 18px;
+    font-size: 20px;
+}
+
+.weather {
+    text-align: right;
 }
 
 table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 20px;
+    margin-top: 30px;
 }
 
 tr {
@@ -55,18 +60,17 @@ tr {
 }
 
 td {
-    padding: 18px 8px;
-    vertical-align: middle;
+    padding: 18px 10px;
 }
 
 .line {
-    width: 120px;
-    font-size: 48px;
+    width: 140px;
+    font-size: 52px;
     font-weight: bold;
 }
 
 .line-m85 {
-    color: #FFD700;
+    color: #FFD400;
 }
 
 .line-285 {
@@ -74,13 +78,13 @@ td {
 }
 
 .destination {
-    font-size: 42px;
+    font-size: 44px;
 }
 
 .minutes {
     width: 180px;
     text-align: right;
-    font-size: 56px;
+    font-size: 58px;
     font-weight: bold;
 }
 
@@ -89,33 +93,30 @@ td {
 }
 
 .error {
-    color: #FF6666;
-    font-size: 32px;
-    padding-top: 30px;
+    color: #ff6666;
+    font-size: 28px;
+    padding-top: 20px;
 }
 </style>
-
 </head>
 
 <body>
 
 <div class="container">
 
-```
-<div class="header">
-    <h1>Engadiner Weg</h1>
-    <div class="clock" id="clock">--:--:--</div>
-</div>
+    <div class="header">
+        <h1>Engadiner Weg</h1>
+        <div class="clock" id="clock">--:--</div>
+    </div>
 
-<div class="updated" id="updated">
-    Loading...
-</div>
+    <div class="subheader">
+        <div id="updated">Loading…</div>
+        <div class="weather" id="weather">Loading weather…</div>
+    </div>
 
-<table>
-    <tbody id="departures">
-    </tbody>
-</table>
-```
+    <table>
+        <tbody id="departures"></tbody>
+    </table>
 
 </div>
 
@@ -124,39 +125,76 @@ td {
 const STOP_ID = "900066353";
 const LINES = ["M85", "285"];
 
+//
+// CLOCK
+//
 function updateClock() {
     document.getElementById("clock").textContent =
-        new Date().toLocaleTimeString("de-DE");
+        new Date().toLocaleTimeString("de-DE", {
+            hour: "2-digit",
+            minute: "2-digit"
+        });
 }
-
 setInterval(updateClock, 1000);
 updateClock();
 
+//
+// WEATHER (Berlin, free API)
+//
+async function loadWeather() {
+    try {
+        const res = await fetch(
+            "https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.405&current_weather=true"
+        );
+        const data = await res.json();
+
+        const w = data.current_weather;
+
+        const icon =
+            w.weathercode === 0 ? "☀️" :
+            w.weathercode <= 2 ? "🌤️" :
+            w.weathercode <= 3 ? "☁️" :
+            w.weathercode <= 67 ? "🌧️" : "❄️";
+
+        document.getElementById("weather").textContent =
+            `${icon} ${Math.round(w.temperature)}°C Berlin`;
+
+    } catch (e) {
+        document.getElementById("weather").textContent =
+            "Weather unavailable";
+    }
+}
+
+//
+// DEPARTURES (only next per line)
+//
 async function loadDepartures() {
 
     try {
-
-        const response = await fetch(
+        const res = await fetch(
             `https://v6.bvg.transport.rest/stops/${STOP_ID}/departures?duration=120`
         );
 
-        const result = await response.json();
+        const data = await res.json();
 
-        const departures = result.departures
-            .filter(dep =>
-                dep.line &&
-                LINES.includes(dep.line.name)
-            )
-            .sort((a, b) =>
-                new Date(a.when) - new Date(b.when)
-            )
-            .slice(0, 12);
+        const filtered = data.departures
+            .filter(d => d.line && LINES.includes(d.line.name));
+
+        // keep only next departure per line
+        const nextPerLine = {};
+        for (const dep of filtered) {
+            if (!nextPerLine[dep.line.name]) {
+                nextPerLine[dep.line.name] = dep;
+            }
+        }
+
+        const list = Object.values(nextPerLine)
+            .sort((a, b) => new Date(a.when) - new Date(b.when));
 
         const tbody = document.getElementById("departures");
-
         tbody.innerHTML = "";
 
-        departures.forEach(dep => {
+        for (const dep of list) {
 
             const mins = Math.round(
                 (new Date(dep.when) - new Date()) / 60000
@@ -164,51 +202,44 @@ async function loadDepartures() {
 
             const row = document.createElement("tr");
 
-            const lineClass =
+            const cls =
                 dep.line.name === "M85"
                     ? "line-m85"
                     : "line-285";
 
             row.innerHTML = `
-                <td class="line ${lineClass}">
+                <td class="line ${cls}">
                     ${dep.line.name}
                 </td>
-
                 <td class="destination">
                     ${dep.direction}
                 </td>
-
                 <td class="minutes">
                     ${
                         mins <= 0
-                        ? '<span class="now">NOW</span>'
-                        : mins + ' min'
+                            ? '<span class="now">NOW</span>'
+                            : mins + ' min'
                     }
                 </td>
             `;
 
             tbody.appendChild(row);
-        });
+        }
 
         document.getElementById("updated").textContent =
-            "Updated: " +
-            new Date().toLocaleTimeString("de-DE");
+            "Updated " + new Date().toLocaleTimeString("de-DE");
 
     } catch (err) {
-
         console.error(err);
-
         document.getElementById("departures").innerHTML =
-            `<tr>
-                <td colspan="3" class="error">
-                    Unable to load departures
-                </td>
-            </tr>`;
+            `<tr><td class="error">Unable to load departures</td></tr>`;
     }
 }
 
+loadWeather();
 loadDepartures();
 
+setInterval(loadWeather, 10 * 60 * 1000);   // every 10 min
 setInterval(loadDepartures, 30000);
 
 </script>
