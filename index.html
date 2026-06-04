@@ -60,42 +60,34 @@ tr {
 }
 
 td {
-    padding: 18px 10px;
+    padding: 16px 10px;
 }
 
 .line {
     width: 140px;
-    font-size: 52px;
+    font-size: 48px;
     font-weight: bold;
 }
 
-.line-m85 {
-    color: #FFD400;
-}
-
-.line-285 {
-    color: #4DB8FF;
-}
+.line-m85 { color: #FFD400; }
+.line-285 { color: #4DB8FF; }
 
 .destination {
-    font-size: 44px;
+    font-size: 40px;
 }
 
 .minutes {
     width: 180px;
     text-align: right;
-    font-size: 58px;
+    font-size: 54px;
     font-weight: bold;
 }
 
-.now {
-    color: #00FF88;
-}
+.now { color: #00FF88; }
 
 .error {
     color: #ff6666;
     font-size: 28px;
-    padding-top: 20px;
 }
 </style>
 </head>
@@ -106,7 +98,7 @@ td {
 
     <div class="header">
         <h1>Engadiner Weg</h1>
-        <div class="clock" id="clock">--:--</div>
+        <div class="clock" id="clock"></div>
     </div>
 
     <div class="subheader">
@@ -139,7 +131,7 @@ setInterval(updateClock, 1000);
 updateClock();
 
 //
-// WEATHER (Berlin, free API)
+// WEATHER
 //
 async function loadWeather() {
     try {
@@ -159,14 +151,14 @@ async function loadWeather() {
         document.getElementById("weather").textContent =
             `${icon} ${Math.round(w.temperature)}°C Berlin`;
 
-    } catch (e) {
+    } catch {
         document.getElementById("weather").textContent =
             "Weather unavailable";
     }
 }
 
 //
-// DEPARTURES (only next per line)
+// DEPARTURES (4+ rows, both directions)
 //
 async function loadDepartures() {
 
@@ -178,23 +170,14 @@ async function loadDepartures() {
         const data = await res.json();
 
         const filtered = data.departures
-            .filter(d => d.line && LINES.includes(d.line.name));
-
-        // keep only next departure per line
-        const nextPerLine = {};
-        for (const dep of filtered) {
-            if (!nextPerLine[dep.line.name]) {
-                nextPerLine[dep.line.name] = dep;
-            }
-        }
-
-        const list = Object.values(nextPerLine)
-            .sort((a, b) => new Date(a.when) - new Date(b.when));
+            .filter(d => d.line && LINES.includes(d.line.name))
+            .sort((a, b) => new Date(a.when) - new Date(b.when))
+            .slice(0, 8); // 👈 ensures at least 4–8 rows
 
         const tbody = document.getElementById("departures");
         tbody.innerHTML = "";
 
-        for (const dep of list) {
+        filtered.forEach(dep => {
 
             const mins = Math.round(
                 (new Date(dep.when) - new Date()) / 60000
@@ -224,7 +207,7 @@ async function loadDepartures() {
             `;
 
             tbody.appendChild(row);
-        }
+        });
 
         document.getElementById("updated").textContent =
             "Updated " + new Date().toLocaleTimeString("de-DE");
@@ -239,7 +222,7 @@ async function loadDepartures() {
 loadWeather();
 loadDepartures();
 
-setInterval(loadWeather, 10 * 60 * 1000);   // every 10 min
+setInterval(loadWeather, 600000);
 setInterval(loadDepartures, 30000);
 
 </script>
