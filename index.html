@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Engadiner Weg Bus Board</title>
+
+<style>
+html,body{
+    margin:0;
+    background:#000;
+    color:#fff;
+    font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;
+    height:100%;
+}
+
+.container{
+    padding:20px;
+}
+
+.header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:20px;
+}
+
+h1{
+    margin:0;
+    font-size:48px;
+}
+
+.clock{
+    font-size:42px;
+    color:#ccc;
+}
+
+.updated{
+    color:#888;
+    margin-bottom:20px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+tr{
+    border-bottom:1px solid #222;
+}
+
+td{
+    padding:18px 10px;
+    font-size:40px;
+}
+
+.line{
+    width:120px;
+    font-weight:bold;
+}
+
+.line-m85{
+    color:#ffd400;
+}
+
+.line-285{
+    color:#52b7ff;
+}
+
+.destination{
+    width:auto;
+}
+
+.minutes{
+    text-align:right;
+    width:180px;
+    font-weight:bold;
+}
+
+.now{
+    color:#00ff88;
+}
+
+.loading{
+    font-size:30px;
+    color:#888;
+}
+
+.error{
+    color:#ff6666;
+    font-size:28px;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<div class="header">
+    <h1>Engadiner Weg</h1>
+    <div class="clock" id="clock"></div>
+</div>
+
+<div class="updated" id="updated"></div>
+
+<table>
+<tbody id="departures">
+<tr>
+<td class="loading">Loading departures…</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+
+<script>
+
+const STOP_NAME = "Engadiner Weg";
+const LINES = ["M85","285"];
+
+let stopId = null;
+
+function updateClock() {
+    document.getElementById("clock").textContent =
+        new Date().toLocaleTimeString("de-DE");
+}
+
+setInterval(updateClock,1000);
+updateClock();
+
+async function findStopId() {
+
+    const response = await fetch(
+        "https://v6.bvg.transport.rest/stops?query=" +
+        encodeURIComponent(STOP_NAME)
+    );
+
+    const data = await response.json();
+
+    if (!data.length) {
+        throw new Error("Stop not found");
+    }
+
+    return data[0].id;
+}
+
+async function loadDepartures() {
+
+    try {
+
+        if(!stopId){
+            stopId = await findStopId();
+            console.log("Stop ID:", stopId);
+        }
+
+        const response = await fetch(
+            `https://v6.bvg.transport.rest/stops/${stopId}/departures?duration=120`
+        );
+
+        const result = await response.json();
+
+        const departures =
+            (result.departures || result)
+            .filter(d =>
+                d.line &&
+                LINES.includes(d.line.name)
+            )
+            .sort((a,b) =>
+                new Date(a.when) -
+                new Date(b.when)
+            )
+            .slice(0,8);
+
+        const tbody =
+            document.getElementById("departures");
+
+        tbody.innerHTML = "";
+
+        departures.forEach(dep => {
+
+            const mins = Math.round(
+                (new Date(dep.when) - new Date())
+                / 60000
+            );
+
+            const tr = document.createElement("tr");
+
+            const lineClass =
+                dep.line.name === "M85"
+                ? "line-m85"
+                : "line-285";
+
+            tr.innerHTML = `
+                <td class="line ${lineClass}">
+                    ${dep.line.name}
+                </td>
+
+                <td class="destination">
+                    ${dep.direction}
+                </td>
+
+                <td class="minutes">
+                    ${
+                        mins <= 0
+                        ? '<span class="now">NOW</span>'
+                        : mins + ' min'
+                    }
+                </td>
+            `;
+
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById("updated")
+            .textContent =
+            "Updated: " +
+            new Date().toLocaleTimeString("de-DE");
+
+    } catch(err) {
+
+        console.error(err);
+
+        document.getElementById("departures")
+            .innerHTML =
+            `<tr><td class="error">
+                Unable to load live departures
+             </td></tr>`;
+    }
+}
+
+loadDepartures();
+
+setInterval(loadDepartures,30000);
+
+</script>
+
+</body>
+</html>
